@@ -29,8 +29,12 @@ import android.media.ImageReader.OnImageAvailableListener;
 import android.os.SystemClock;
 import android.util.Size;
 import android.util.TypedValue;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 import java.io.IOException;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import org.tensorflow.lite.examples.detection.customview.OverlayView;
@@ -81,6 +85,9 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
   private MultiBoxTracker tracker;
 
   private BorderedText borderedText;
+
+  //label-color-Map für die im aktuellen Frame erkannten Klassen
+  private Map<String, Integer> labelColorMapPerFrame = new HashMap<String, Integer>();
 
   @Override
   public void onPreviewSizeChosen(final Size size, final int rotation) {
@@ -210,7 +217,8 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
               }
             }
 
-            tracker.trackResults(mappedRecognitions, currTimestamp);
+            //Enthält die Klassen-Farben-Zuordnung für die Legende
+            labelColorMapPerFrame = tracker.trackResults(mappedRecognitions, currTimestamp);
             trackingOverlay.postInvalidate();
 
             computingDetection = false;
@@ -222,10 +230,25 @@ public class DetectorActivity extends CameraActivity implements OnImageAvailable
                     showFrameInfo(previewWidth + "x" + previewHeight);
                     showCropInfo(cropCopyBitmap.getWidth() + "x" + cropCopyBitmap.getHeight());
                     showInference(lastProcessingTimeMs + "ms");
+
+                    updateLegend();
                   }
                 });
           }
         });
+  }
+
+  //Löscht alte Textviews in der Legende und fügt pro erkannter Klasse einen neuen Textview hinzu
+  protected void updateLegend() {
+    LinearLayout layout = findViewById(R.id.legend_layout);
+    layout.removeAllViews();
+
+    for (Map.Entry<String, Integer> entry : labelColorMapPerFrame.entrySet()) {
+      TextView textView = new TextView(getApplicationContext());
+      textView.setText(entry.getKey());
+      textView.setTextColor(entry.getValue());
+      layout.addView(textView);
+    }
   }
 
   @Override

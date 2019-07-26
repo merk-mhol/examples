@@ -207,15 +207,25 @@ public class TFLiteObjectDetectionAPIModel implements Classifier {
       // in label file and class labels start from 1 to number_of_classes+1,
       // while outputClasses correspond to class index from 0 to number_of_classes
       int labelOffset = 1;
-      recognitions.add(
+
+      //Siehe: https://github.com/tensorflow/tensorflow/issues/22106#issuecomment-428409506
+      final int classLabel = (int) outputClasses[0][i] + labelOffset;
+      if (inRange(classLabel, labels.size(), 0) && inRange(outputScores[0][i], 1, 0)) {
+        recognitions.add(
           new Recognition(
-              "" + i,
-              labels.get((int) outputClasses[0][i] + labelOffset),
-              outputScores[0][i],
-              detection));
+            "" + i,
+            labels.get(classLabel),
+            outputScores[0][i],
+            detection));
+      }
     }
     Trace.endSection(); // "recognizeImage"
     return recognitions;
+  }
+
+  //Siehe: https://github.com/tensorflow/tensorflow/issues/22106#issuecomment-428409506
+  private boolean inRange(float number, float max, float min) {
+    return number < max && number >= min;
   }
 
   @Override

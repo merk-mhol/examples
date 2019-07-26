@@ -53,4 +53,8 @@
     <include
         android:id="@+id/bottom_sheet_layout"
         layout="@layout/layout_bottom_sheet" />
+
+    <include
+        android:id="@+id/legend_layout"
+        layout="@layout/legend" />
 </android.support.design.widget.CoordinatorLayout>

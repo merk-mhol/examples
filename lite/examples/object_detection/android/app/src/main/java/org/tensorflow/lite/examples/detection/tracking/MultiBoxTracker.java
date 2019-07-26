@@ -27,9 +27,13 @@ import android.graphics.RectF;
 import android.text.TextUtils;
 import android.util.Pair;
 import android.util.TypedValue;
+
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Map;
+import java.util.Random;
 import org.tensorflow.lite.examples.detection.env.BorderedText;
 import org.tensorflow.lite.examples.detection.env.ImageUtils;
 import org.tensorflow.lite.examples.detection.env.Logger;
@@ -56,6 +60,10 @@ public class MultiBoxTracker {
     Color.parseColor("#AA33AA"),
     Color.parseColor("#0D0068")
   };
+
+  //label-color-Map für alle bisher erkannten Klassen
+  private Map<String, Integer> labelColorMap = new HashMap<String, Integer>();
+
   final List<Pair<Float, RectF>> screenRects = new LinkedList<Pair<Float, RectF>>();
   private final Logger logger = new Logger();
   private final Queue<Integer> availableColors = new LinkedList<Integer>();
@@ -111,9 +119,11 @@ public class MultiBoxTracker {
     }
   }
 
-  public synchronized void trackResults(final List<Recognition> results, final long timestamp) {
+  public synchronized Map<String, Integer> trackResults(final List<Recognition> results, final long timestamp) {
     logger.i("Processing %d results from %d", results.size(), timestamp);
-    processResults(results);
+    Map<String, Integer> labelColorMap = processResults(results);
+
+    return labelColorMap;
   }
 
   private Matrix getFrameToCanvasMatrix() {
@@ -154,11 +164,16 @@ public class MultiBoxTracker {
     }
   }
 
-  private void processResults(final List<Recognition> results) {
+  private Map<String, Integer> processResults(final List<Recognition> results) {
     final List<Pair<Float, Recognition>> rectsToTrack = new LinkedList<Pair<Float, Recognition>>();
 
     screenRects.clear();
     final Matrix rgbFrameToScreen = new Matrix(getFrameToCanvasMatrix());
+
+    Map<String, Integer> labelColorMapPerFrame = new HashMap<String, Integer>();
+
+    //Auskommentieren wenn BBs länger als einen Frame bleiben sollen
+    trackedObjects.clear();
 
     for (final Recognition result : results) {
       if (result.getLocation() == null) {
@@ -180,26 +195,51 @@ public class MultiBoxTracker {
       }
 
       rectsToTrack.add(new Pair<Float, Recognition>(result.getConfidence(), result));
+
+      //Befülle die ganzheitliche Label-Color-Map
+      //Wenn alle Farben von COLORS verwendet wurden, setze Random-Colors
+      if (!labelColorMap.containsKey(result.getTitle())) {
+        if (labelColorMap.size() < COLORS.length) {
+          labelColorMap.put(result.getTitle(), COLORS[labelColorMap.size()]);
+        }
+        else {
+          Random rnd = new Random();
+          int random_color = Color.argb(255, rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256));
+
+          labelColorMap.put(result.getTitle(), random_color);
+        }
+      }
+
+      //Füge der Per Frame Label-Color-Map den entprechenden Eintrag aus den ganzheitlichen Map hinzu
+      labelColorMapPerFrame.put(result.getTitle(), labelColorMap.get(result.getTitle()));
     }
 
     if (rectsToTrack.isEmpty()) {
       logger.v("Nothing to track, aborting.");
-      return;
+      return labelColorMapPerFrame;
     }
 
-    trackedObjects.clear();
+
+    //Auskommentieren wenn BBs nur einen Frame bleiben sollen
+    //trackedObjects.clear();
     for (final Pair<Float, Recognition> potential : rectsToTrack) {
       final TrackedRecognition trackedRecognition = new TrackedRecognition();
       trackedRecognition.detectionConfidence = potential.first;
       trackedRecognition.location = new RectF(potential.second.getLocation());
-      trackedRecognition.title = potential.second.getTitle();
-      trackedRecognition.color = COLORS[trackedObjects.size()];
+      //trackedRecognition.title = potential.second.getTitle();
+
+      //Das erkannte Objekt entpsrechend seines Labels färben
+      trackedRecognition.color = labelColorMap.get(potential.second.getTitle());
+      //trackedRecognition.color = COLORS[trackedObjects.size()];
+
       trackedObjects.add(trackedRecognition);
 
       if (trackedObjects.size() >= COLORS.length) {
         break;
       }
     }
+
+    return labelColorMapPerFrame;
   }
 
   private static class TrackedRecognition {
